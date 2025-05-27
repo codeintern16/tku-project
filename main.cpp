@@ -153,8 +153,8 @@ void print_vertical_timetable() {
     }
     printf("|\n");
 
-    for (int i = 0; i < 1 + DAYS; i++) printf("--------------");
-    printf("-\n");
+    for (int i = 0; i < 1 + DAYS; i++) printf("-------------");
+    printf("---\n");
 
     for (int p = 1; p <= PERIODS; p++) {
         printf("%-8d", p);
@@ -198,6 +198,9 @@ int main() {
             case 5:
                 printf("Exiting program.\n");
                 return 0;
+            case 69:
+                printf("不可以色色\n");
+                break;
             default:
                 printf("Invalid choice. Try again.\n");
         }
