@@ -4,35 +4,40 @@
 
 #define MAX_COURSES 100
 #define MAX_NAME_LEN 50
+#define MAX_SLOTS 5
 #define DAYS 7
 #define PERIODS 14
 
-struct course {
-    int course_id;
-    int credits;
-    char name[MAX_NAME_LEN];
+struct slot {
     int weekday;       // 1 = Monday, ..., 7 = Sunday
     int start_period;
     int end_period;
 };
 
+struct course {
+    int course_id;
+    int credits;
+    char name[MAX_NAME_LEN];
+    int slot_count;
+    struct slot slots[MAX_SLOTS];
+};
+
 struct course courses[MAX_COURSES];
 int course_count = 0;
 
-// 檢查是否衝堂
-int check_conflict(int weekday, int start, int end) {
+int check_conflict(struct slot s) {
     for (int i = 0; i < course_count; i++) {
-        if (courses[i].weekday == weekday) {
-            if (!(end < courses[i].start_period || start > courses[i].end_period)) {
-                return 1; // 有衝堂
+        for (int j = 0; j < courses[i].slot_count; j++) {
+            if (courses[i].slots[j].weekday == s.weekday) {
+                if (!(s.end_period < courses[i].slots[j].start_period || s.start_period > courses[i].slots[j].end_period)) {
+                    return 1; // Conflict
+                }
             }
         }
     }
     return 0;
 }
 
-
-// 加入課程
 void add_course() {
     if (course_count >= MAX_COURSES) {
         printf("Course list is full.\n");
@@ -43,10 +48,9 @@ void add_course() {
     printf("Enter course ID: ");
     scanf("%d", &c.course_id);
 
-    // 檢查課程 ID 是否重複
     for (int i = 0; i < course_count; i++) {
         if (courses[i].course_id == c.course_id) {
-            printf("Error: Course ID %d already exists. Course not added.\n", c.course_id);
+            printf("Error: Course ID already exists.\n");
             return;
         }
     }
@@ -56,46 +60,38 @@ void add_course() {
     printf("Enter credits: ");
     scanf("%d", &c.credits);
 
-    // 驗證 weekday
-    printf("Enter weekday (1=Mon, ..., 7=Sun): ");
-    scanf("%d", &c.weekday);
-    if (c.weekday < 1 || c.weekday > 7) {
-        printf("Error: Weekday must be between 1 and 7.\n");
+    printf("Enter number of time slots (max %d): ", MAX_SLOTS);
+    scanf("%d", &c.slot_count);
+
+    if (c.slot_count > MAX_SLOTS || c.slot_count < 1) {
+        printf("Invalid slot count.\n");
         return;
     }
 
-    // 驗證 start_period
-    printf("Enter start period (1~14): ");
-    scanf("%d", &c.start_period);
-    if (c.start_period < 1 || c.start_period > 14) {
-        printf("Error: Start period must be between 1 and 14.\n");
-        return;
-    }
+    for (int i = 0; i < c.slot_count; i++) {
+        printf("Slot %d:\n", i + 1);
+        printf("  Weekday (1=Mon, ..., 7=Sun): ");
+        scanf("%d", &c.slots[i].weekday);
+        printf("  Start period (1-14): ");
+        scanf("%d", &c.slots[i].start_period);
+        printf("  End period (1-14): ");
+        scanf("%d", &c.slots[i].end_period);
 
-    // 驗證 end_period
-    printf("Enter end period (1~14): ");
-    scanf("%d", &c.end_period);
-    if (c.end_period < 1 || c.end_period > 14) {
-        printf("Error: End period must be between 1 and 14.\n");
-        return;
-    }
-    if (c.end_period < c.start_period) {
-        printf("Error: End period cannot be earlier than start period.\n");
-        return;
-    }
+        if (c.slots[i].end_period < c.slots[i].start_period) {
+            printf("  Invalid period range.\n");
+            return;
+        }
 
-    if (check_conflict(c.weekday, c.start_period, c.end_period)) {
-        printf("Conflict detected! Course not added.\n");
-        return;
+        if (check_conflict(c.slots[i])) {
+            printf("  Conflict detected on slot %d.\n", i + 1);
+            return;
+        }
     }
 
     courses[course_count++] = c;
     printf("Course added successfully.\n");
 }
 
-
-
-// 刪除課程
 void delete_course() {
     int id;
     printf("Enter course ID to delete: ");
@@ -106,22 +102,15 @@ void delete_course() {
                 courses[j] = courses[j + 1];
             }
             course_count--;
-            printf("Course deleted successfully.\n");
+            printf("Course deleted.\n");
             return;
         }
     }
-    printf("Course with ID %d not found.\n", id);
+    printf("Course not found.\n");
 }
 
-// 學分加總，並顯示每門課程學分
 void total_credits() {
     int total = 0;
-
-    if (course_count == 0) {
-        printf("No courses available.\n");
-        return;
-    }
-
     printf("\n%-5s | %-20s | %-7s\n", "ID", "Course Name", "Credits");
     printf("---------------------------------------------\n");
 
@@ -134,16 +123,16 @@ void total_credits() {
     printf("Total credits: %d\n", total);
 }
 
-
-//輸出課表
 void print_vertical_timetable() {
-    char timetable[DAYS][PERIODS + 1][MAX_NAME_LEN * 2] = {""};  // 擴大大小以容納名稱+ID
-    const char* days_of_week[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    char timetable[DAYS][PERIODS + 1][MAX_NAME_LEN * 2] = {""};
+    const char* days_of_week[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 
     for (int i = 0; i < course_count; i++) {
-        int day = courses[i].weekday % 7;
-        for (int p = courses[i].start_period; p <= courses[i].end_period; p++) {
-            snprintf(timetable[day][p], sizeof(timetable[day][p]), "%s(%d)", courses[i].name, courses[i].course_id);
+        for (int s = 0; s < courses[i].slot_count; s++) {
+            int day = courses[i].slots[s].weekday - 1;
+            for (int p = courses[i].slots[s].start_period; p <= courses[i].slots[s].end_period; p++) {
+                snprintf(timetable[day][p], sizeof(timetable[day][p]), "%s(%d)", courses[i].name, courses[i].course_id);
+            }
         }
     }
 
@@ -159,17 +148,72 @@ void print_vertical_timetable() {
     for (int p = 1; p <= PERIODS; p++) {
         printf("%-8d", p);
         for (int d = 0; d < DAYS; d++) {
-            if (strlen(timetable[d][p]) > 0)
-                printf("| %-12s", timetable[d][p]);
-            else
-                printf("| %-12s", "");
+            printf("| %-12s", timetable[d][p]);
         }
         printf("|\n");
     }
 }
 
+void save_to_csv(const char* filename) {
+    FILE* fp = fopen(filename, "w");
+    if (!fp) {
+        printf("Failed to open file.\n");
+        return;
+    }
+    fprintf(fp, "course_id,name,credits,slot_weekday,slot_start,slot_end\n");
+    for (int i = 0; i < course_count; i++) {
+        for (int j = 0; j < courses[i].slot_count; j++) {
+            fprintf(fp, "%d,%s,%d,%d,%d,%d\n", courses[i].course_id, courses[i].name, courses[i].credits,
+                    courses[i].slots[j].weekday, courses[i].slots[j].start_period, courses[i].slots[j].end_period);
+        }
+    }
+    fclose(fp);
+    printf("Saved to %s\n", filename);
+}
 
-// 主功能選單
+void load_from_csv(const char* filename) {
+    FILE* fp = fopen(filename, "r");
+    if (!fp) {
+        printf("Failed to open file.\n");
+        return;
+    }
+
+    char line[256];
+    fgets(line, sizeof(line), fp); // skip header
+
+    course_count = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        int id, credits, weekday, start, end;
+        char name[MAX_NAME_LEN];
+
+        sscanf(line, "%d,%[^,],%d,%d,%d,%d", &id, name, &credits, &weekday, &start, &end);
+
+        int found = -1;
+        for (int i = 0; i < course_count; i++) {
+            if (courses[i].course_id == id) {
+                found = i;
+                break;
+            }
+        }
+
+        if (found == -1) {
+            courses[course_count].course_id = id;
+            strcpy(courses[course_count].name, name);
+            courses[course_count].credits = credits;
+            courses[course_count].slot_count = 0;
+            found = course_count++;
+        }
+
+        int sc = courses[found].slot_count;
+        courses[found].slots[sc].weekday = weekday;
+        courses[found].slots[sc].start_period = start;
+        courses[found].slots[sc].end_period = end;
+        courses[found].slot_count++;
+    }
+    fclose(fp);
+    printf("Loaded from %s\n", filename);
+}
+
 int main() {
     int choice;
     while (1) {
@@ -179,6 +223,8 @@ int main() {
         printf("3. Print timetable\n");
         printf("4. Delete course\n");
         printf("5. Exit\n");
+        printf("6. Save to CSV\n");
+        printf("7. Load from CSV\n");
         printf("Choose an option: ");
         scanf("%d", &choice);
 
@@ -198,13 +244,15 @@ int main() {
             case 5:
                 printf("Exiting program.\n");
                 return 0;
-            case 69:
-                printf("不可以色色\n");
+            case 6:
+                save_to_csv("courses.csv");
+                break;
+            case 7:
+                load_from_csv("courses.csv");
                 break;
             default:
-                printf("Invalid choice. Try again.\n");
+                printf("Invalid choice.\n");
         }
     }
-
     return 0;
 }
